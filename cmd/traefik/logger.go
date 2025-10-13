@@ -72,24 +72,36 @@ func getLogWriter(staticConfiguration *static.Configuration) io.Writer {
 		return io.Discard
 	}
 
+	// always log to console
 	var w io.Writer = os.Stdout
+
+	if staticConfiguration.Log == nil || staticConfiguration.Log.Format != "json" {
+		w = zerolog.ConsoleWriter{
+			Out:        w,
+			TimeFormat: time.RFC3339,
+			NoColor:    staticConfiguration.Log != nil && staticConfiguration.Log.NoColor,
+		}
+	}
+
 	if staticConfiguration.Log != nil && len(staticConfiguration.Log.FilePath) > 0 {
 		_, _ = os.OpenFile(staticConfiguration.Log.FilePath, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0o666)
-		w = &lumberjack.Logger{
+		var fileWriter io.Writer
+		fileWriter = &lumberjack.Logger{
 			Filename:   staticConfiguration.Log.FilePath,
 			MaxSize:    staticConfiguration.Log.MaxSize,
 			MaxBackups: staticConfiguration.Log.MaxBackups,
 			MaxAge:     staticConfiguration.Log.MaxAge,
 			Compress:   true,
 		}
-	}
 
-	if staticConfiguration.Log == nil || staticConfiguration.Log.Format != "json" {
-		w = zerolog.ConsoleWriter{
-			Out:        w,
-			TimeFormat: time.RFC3339,
-			NoColor:    staticConfiguration.Log != nil && (staticConfiguration.Log.NoColor || len(staticConfiguration.Log.FilePath) > 0),
+		if staticConfiguration.Log == nil || staticConfiguration.Log.Format != "json" {
+			fileWriter = zerolog.ConsoleWriter{
+				Out:        fileWriter,
+				TimeFormat: time.RFC3339,
+				NoColor:    true,
+			}
 		}
+		w = io.MultiWriter(w, fileWriter)
 	}
 
 	return w
